@@ -1,0 +1,94 @@
+import urllib.request
+import re
+import ssl
+
+# Function to generate bigrams from a list of words
+def generate_bigrams(words):
+    bigrams = []
+    for i in range(len(words) - 1):
+        bigram = (words[i], words[i + 1])
+        bigrams.append(bigram)
+    return bigrams
+
+# URL for training data
+train_url = "https://raw.githubusercontent.com/waseymulla/CS6320-HW1/main/train.txt"
+
+# URL for test data
+test_url = "https://raw.githubusercontent.com/waseymulla/CS6320-HW1/main/val.txt"
+
+# Disable SSL certificate verification
+context = ssl._create_unverified_context()
+
+# Load and preprocess training data
+train_file = urllib.request.urlopen(train_url, context=context)
+unigram_counts = {}
+bigram_counts = {}
+total_unigrams = 0
+vocabulary = set()
+previous_word = None
+
+# Function to preprocess text
+def preprocess_text(text):
+    text = text.lower()
+    text = re.sub(r'[^a-zA-Z0-9\s\']', '', text)
+    return text
+
+# Laplace (Add-one) Smoothing Function
+def laplace_smoothing(count, total, vocab_size, smoothing_param=1):
+    return (count + smoothing_param) / (total + smoothing_param * vocab_size)
+
+# Add-k Smoothing Function
+def add_k_smoothing(count, unigram_count, vocab_size, smoothing_param):
+    return (count + smoothing_param) / (unigram_count + smoothing_param * vocab_size)
+
+# Smoothing parameters
+laplace_smoothing_param = 1
+add_k_smoothing_param_1 = 0.1
+add_k_smoothing_param_2 = 0.5
+
+# Initialize a list to store unknown words
+unknown_words = []
+
+for line in train_file:
+    line = line.decode("utf-8").split()
+    for word in line:
+        word = preprocess_text(word)
+        vocabulary.add(word)
+        unigram_counts[word] = unigram_counts.get(word, 0) + 1
+        total_unigrams += 1
+        if previous_word:
+            bigram = (previous_word, word)
+            bigram_counts[bigram] = bigram_counts.get(bigram, 0) + 1
+        if word not in unigram_counts:
+            unknown_words.append(word)
+        previous_word = word
+
+# Calculate unigram probabilities with Laplace Smoothing
+unigram_probabilities_laplace = {word: laplace_smoothing(count, total_unigrams, len(vocabulary), laplace_smoothing_param) for word, count in unigram_counts.items()}
+
+# Calculate bigram probabilities with Add-k Smoothing
+bigram_probabilities_add_k_1 = {bigram: add_k_smoothing(count, unigram_counts[bigram[0]], len(vocabulary), add_k_smoothing_param_1) for bigram, count in bigram_counts.items()}
+bigram_probabilities_add_k_2 = {bigram: add_k_smoothing(count, unigram_counts[bigram[0]], len(vocabulary), add_k_smoothing_param_2) for bigram, count in bigram_counts.items()}
+
+# Initialize a list to store unknown words in the test data
+unknown_words_test = []
+
+# Load and preprocess test data
+test_file = urllib.request.urlopen(test_url, context=context)
+for line in test_file:
+    line = line.decode("utf-8").split()
+    for word in line:
+        word = preprocess_text(word)
+        if word not in unigram_counts:
+            unknown_words_test.append(word)
+
+# Print the results including unknown words in the test data
+print('Total unigrams (Train):', total_unigrams)
+print('Unigram probabilities (Laplace Smoothing):', unigram_probabilities_laplace)
+print('Bigram probabilities (Add-k Smoothing with k = 0.1):', bigram_probabilities_add_k_1)
+print('Bigram probabilities (Add-k Smoothing with k = 0.5):', bigram_probabilities_add_k_2)
+print('Unknown words (Train):', unknown_words)
+print('Unknown words (Test):', unknown_words_test)
+
+print('----END----')
+# print(vocabulary)
