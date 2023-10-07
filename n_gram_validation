@@ -1,6 +1,7 @@
 import urllib.request
 import re
 import ssl
+import math
 
 # Define start and end symbols
 start_symbol = "#"  # Symbol to mark the start of a data point
@@ -44,6 +45,10 @@ def laplace_smoothing(count, total, vocab_size, smoothing_param=1):
 # Add-k Smoothing Function
 def add_k_smoothing(count, unigram_count, vocab_size, smoothing_param):
     return (count + smoothing_param) / (unigram_count + smoothing_param * vocab_size)
+
+def calculate_perplexity_corpus(probabililty_dict: dict):
+    probabililty_list = probabililty_dict.values()
+    return math.exp(-sum([math.log(value) for value in probabililty_list])/len(probabililty_list))
 
 # Smoothing parameters
 laplace_smoothing_param = 1
@@ -136,6 +141,13 @@ print(bigram_probabilities_add_k_2)
 
 print('\nUnknown words (Test):')
 print(unknown_words_test)
+
+print('\nPerplexity unigram #1:', calculate_perplexity_corpus(unigram_probabilities_laplace))
+print('\nPerplexity unigram #2:', calculate_perplexity_corpus(unigram_probabilities_add_k_1))
+print('\nPerplexity unigram #3:', calculate_perplexity_corpus(unigram_probabilities_add_k_2))
+print('\nPerplexity bigram #1:', calculate_perplexity_corpus(bigram_probabilities_laplace))
+print('\nPerplexity bigram #2:', calculate_perplexity_corpus(bigram_probabilities_add_k_1))
+print('\nPerplexity bigram #3:', calculate_perplexity_corpus(bigram_probabilities_add_k_2))
 
 print('----END----')
 # print(vocabulary)
