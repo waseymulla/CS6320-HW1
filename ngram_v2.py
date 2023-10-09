@@ -18,25 +18,11 @@ test_url = "https://raw.githubusercontent.com/waseymulla/CS6320-HW1/main/val.txt
 # Disable SSL certificate verification
 context = ssl._create_unverified_context()
 
-# Load and preprocess training data
-train_file = urllib.request.urlopen(train_url, context=context)
-unigram_counts = {}
-bigram_counts = {}
-previous_token = None
-
-'''
-# Function to preprocess text
-def preprocess_text(text):
-    text = text.lower()
-    text = re.sub(r'[^a-zA-Z0-9\s\']', '', text)
-    return text
-'''
-
-def preprocess_entry(text: str):
-    text = text.lower()
+def preprocess_line(text: str):
+    text = text.lower()                         # convert to lowercase
     text = re.sub(r'[^a-zA-Z0-9\s]', '', text)  # remove special characters
     text = re.sub(r'(\s+)', ' ', text)          # remove multiple whitespaces
-    return text
+    return text.split()                         # split into list of tokens
 
 # Laplace (Add-one) Smoothing Function
 def laplace_smoothing(word_count, total_token_count, vocab_size, smoothing_param=1):
@@ -71,7 +57,6 @@ def evaluate_basic_model_bigram(corpus: list, token_counts: dict, bigram_counts:
     perplexity = math.exp(-sum(validation_probs_log)/total_tokens)
     return perplexity
 
-
 def evaluate_model(corpus: list, train_probs: dict, total_tokens_test: int):
     validation_probs_log = []
     for review in corpus:
@@ -92,24 +77,27 @@ def evaluate_bigram_model(corpus: list, train_probs: dict, total_tokens_test: in
             # if the key does not exist, we do not have probability of "word1 word2"
             # calculate it: prob_method(0, unigram_counts[bigram[0]], len(vocabulary), param)
             # log since probability becomes very small on multiplication
-            log_review_prob += math.log(train_probs.get(bigram, prob_method(0, unigram_counts[bigram[0]], len(vocabulary), param)))
+            log_review_prob += math.log(train_probs.get(bigram, prob_method(0, unigram_train_counts[bigram[0]], len(vocabulary), param)))
         validation_probs_log.append(log_review_prob)
     perplexity = math.exp(-sum(validation_probs_log)/total_tokens_test)
     return perplexity
 
 '''
-LOAD AND PREPROCESS TRAIN DATA
+LOAD, PREPROCESS AND GET COUNTS FROM TRAIN DATA
 '''
-
+# Load and preprocess training data
+train_file = urllib.request.urlopen(train_url, context=context)
+unigram_train_counts = {}
+bigram_train_counts = {}
+previous_token = None
 train_unigrams_sentences = []
 train_bigrams_sentences = []
 
 for line in train_file:
     line = line.decode("utf-8")     # only for URL
 
-    # preprocess
-    line = preprocess_entry(line)
-    line = line.split()
+    # preprocess, get list of tokens
+    line = preprocess_line(line)
 
     # Add the start and end symbols
     line.insert(0, start_token)
@@ -117,22 +105,22 @@ for line in train_file:
 
     train_unigrams_sentences.append(line)
 
-    previous_token = None    # bigram history
     current_bigrams = []
+    previous_token = None    # bigram history
 
-    for unigram in line:
-        unigram_counts[unigram] = unigram_counts.get(unigram, 0) + 1
+    for token in line:
+        unigram_train_counts[token] = unigram_train_counts.get(token, 0) + 1
 
         if previous_token:
-            bigram = (previous_token, unigram)
-            bigram_counts[bigram] = bigram_counts.get(bigram, 0) + 1
+            bigram = (previous_token, token)
+            bigram_train_counts[bigram] = bigram_train_counts.get(bigram, 0) + 1
             current_bigrams.append(bigram)
-        previous_token = unigram
+        previous_token = token
     train_bigrams_sentences.append(current_bigrams)
 
 # initialise vocabulary
-vocabulary = unigram_counts.keys()
-total_tokens_train = sum(unigram_counts.values())
+vocabulary = unigram_train_counts.keys()
+total_tokens_train = sum(unigram_train_counts.values())
 
 print('Vocab length:', len(vocabulary))
 
@@ -146,9 +134,8 @@ test_file = urllib.request.urlopen(test_url, context=context)
 for line in test_file:
     line = line.decode("utf-8")     # only for URL
 
-    # preprocess
-    line = preprocess_entry(line)
-    line = line.split()
+    # preprocess, get list of tokens
+    line = preprocess_line(line)
 
     # replace unknown words with unknown token
     line = [unk_token if word not in vocabulary else word for word in line]
@@ -163,11 +150,11 @@ for line in test_file:
     # add bigrams for this review
     previous_token = None    # bigram history
     current_bigrams = []
-    for unigram in line:
+    for token in line:
         if previous_token:
-            bigram = (previous_token, unigram)
+            bigram = (previous_token, token)
             current_bigrams.append(bigram)
-        previous_token = unigram
+        previous_token = token
     test_bigrams_sentences.append(current_bigrams)
 
 total_tokens_test = sum([len(review) for review in test_unigrams_sentences])
@@ -176,19 +163,19 @@ total_tokens_test = sum([len(review) for review in test_unigrams_sentences])
 Use <UNK> for count<=1, attempt to get perplexity
 '''
 unknown_tokens_train = set()
-unigrams_counts_unk = copy.deepcopy(unigram_counts)
+unigrams_counts_unk = copy.deepcopy(unigram_train_counts)
 counter = 0
-for unigram, count in unigram_counts.items():
+for token, count in unigram_train_counts.items():
     if count <=1:
         counter += count
-        unknown_tokens_train.add(unigram)
-        del unigrams_counts_unk[unigram]
+        unknown_tokens_train.add(token)
+        del unigrams_counts_unk[token]
 # add our decided unknown token counts with <UNK>
 unigrams_counts_unk[unk_token] = counter
 known_words = set(vocabulary) - unknown_tokens_train
 
-bigram_counts_unk = copy.deepcopy(bigram_counts)
-for bigram, count in bigram_counts.items():
+bigram_counts_unk = copy.deepcopy(bigram_train_counts)
+for bigram, count in bigram_train_counts.items():
     if bigram[0] not in known_words and bigram[1] not in known_words:
         del bigram_counts_unk[bigram]
         bigram_counts_unk[(unk_token, unk_token)] = bigram_counts_unk.get((unk_token, unk_token), 0) + 1
@@ -200,7 +187,7 @@ for bigram, count in bigram_counts.items():
         bigram_counts_unk[(bigram[0], unk_token)] = bigram_counts_unk.get((bigram[0], unk_token), 0) + 1
 
 
-print('Total:', len(unigram_counts), 'UNK:', len(unknown_tokens_train), 'Known:', len(unigrams_counts_unk))
+print('Total:', len(unigram_train_counts), 'UNK:', len(unknown_tokens_train), 'Known:', len(unigrams_counts_unk))
 
 
 print('\n-----------------BASIC UNK PROCESSING----------------------')
@@ -214,15 +201,15 @@ print('Perplexity with UNK, bigram, test data:', evaluate_basic_model_bigram(tes
 SMOOTHING PROCESSING
 '''
 # add unknown tokens FOR SMOOTHING
-for unigram in vocabulary:
-    bigram_counts[(unk_token, unigram)] = 0
-    bigram_counts[(unigram, unk_token)] = 0
-bigram_counts[(unk_token, unk_token)] = 0
-unigram_counts[unk_token] = 0
+for token in vocabulary:
+    bigram_train_counts[(unk_token, token)] = 0
+    bigram_train_counts[(token, unk_token)] = 0
+bigram_train_counts[(unk_token, unk_token)] = 0
+unigram_train_counts[unk_token] = 0
 
 # Reinit for smoothing
-vocabulary = unigram_counts.keys()  # set of unique tokens
-total_tokens_train = sum(unigram_counts.values())
+vocabulary = unigram_train_counts.keys()  # set of unique tokens
+total_tokens_train = sum(unigram_train_counts.values())
 vocabulary_size = len(vocabulary)
 
 # Smoothing parameters
@@ -231,22 +218,22 @@ add_k_smoothing_param_1 = 0.1
 add_k_smoothing_param_2 = 0.5
 
 # Calculate unigram probabilities with Laplace Smoothing
-unigram_probabilities_laplace = {word: laplace_smoothing(count, total_tokens_train, vocabulary_size, laplace_smoothing_param) for word, count in unigram_counts.items()}
+unigram_probabilities_laplace = {word: laplace_smoothing(count, total_tokens_train, vocabulary_size, laplace_smoothing_param) for word, count in unigram_train_counts.items()}
 
 # Calculate unigram probabilities with Add-k Smoothing (k = 0.1)
-unigram_probabilities_add_k_1 = {word: add_k_smoothing(count, total_tokens_train, vocabulary_size, add_k_smoothing_param_1) for word, count in unigram_counts.items()}
+unigram_probabilities_add_k_1 = {word: add_k_smoothing(count, total_tokens_train, vocabulary_size, add_k_smoothing_param_1) for word, count in unigram_train_counts.items()}
 
 # Calculate unigram probabilities with Add-k Smoothing (k = 0.5)
-unigram_probabilities_add_k_2 = {word: add_k_smoothing(count, total_tokens_train, vocabulary_size, add_k_smoothing_param_2) for word, count in unigram_counts.items()}
+unigram_probabilities_add_k_2 = {word: add_k_smoothing(count, total_tokens_train, vocabulary_size, add_k_smoothing_param_2) for word, count in unigram_train_counts.items()}
 
 # Calculate bigram probabilities with Laplace Smoothing
-bigram_probabilities_laplace = {bigram: laplace_smoothing(count, unigram_counts[bigram[0]], vocabulary_size, laplace_smoothing_param) for bigram, count in bigram_counts.items()}
+bigram_probabilities_laplace = {bigram: laplace_smoothing(count, unigram_train_counts[bigram[0]], vocabulary_size, laplace_smoothing_param) for bigram, count in bigram_train_counts.items()}
 
 # Calculate bigram probabilities with Add-k Smoothing (k = 0.1)
-bigram_probabilities_add_k_1 = {bigram: add_k_smoothing(count, unigram_counts[bigram[0]], vocabulary_size, add_k_smoothing_param_1) for bigram, count in bigram_counts.items()}
+bigram_probabilities_add_k_1 = {bigram: add_k_smoothing(count, unigram_train_counts[bigram[0]], vocabulary_size, add_k_smoothing_param_1) for bigram, count in bigram_train_counts.items()}
 
 # Calculate bigram probabilities with Add-k Smoothing (k = 0.5)
-bigram_probabilities_add_k_2 = {bigram: add_k_smoothing(count, unigram_counts[bigram[0]], vocabulary_size, add_k_smoothing_param_2) for bigram, count in bigram_counts.items()}
+bigram_probabilities_add_k_2 = {bigram: add_k_smoothing(count, unigram_train_counts[bigram[0]], vocabulary_size, add_k_smoothing_param_2) for bigram, count in bigram_train_counts.items()}
 
 
 print('\n------------------TRAINING CORPUS--------------------------')
