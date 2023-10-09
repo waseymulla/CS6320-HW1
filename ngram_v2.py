@@ -5,17 +5,9 @@ import math
 import copy
 
 # Define start, end, unknown-word tokens
-start_token = "###"  # Symbol to mark the start of a data point
-end_token = "$$$"    # Symbol to mark the end of a data point
-unk_token = "&&&"
-
-# # Function to generate bigrams from a list of words
-# def generate_bigrams(words):
-#     bigrams = []
-#     for i in range(len(words) - 1):
-#         bigram = (words[i], words[i + 1])
-#         bigrams.append(bigram)
-#     return bigrams
+start_token = "<STR>"  # Symbol to mark the start of a data point
+end_token = "<STP>"    # Symbol to mark the end of a data point
+unk_token = "<UNK>"
 
 # URL for training data
 train_url = "https://raw.githubusercontent.com/waseymulla/CS6320-HW1/main/train.txt"
@@ -30,8 +22,6 @@ context = ssl._create_unverified_context()
 train_file = urllib.request.urlopen(train_url, context=context)
 unigram_counts = {}
 bigram_counts = {}
-# total_unigrams = 0
-# vocabulary = set()
 previous_token = None
 
 '''
@@ -56,12 +46,31 @@ def laplace_smoothing(word_count, total_token_count, vocab_size, smoothing_param
 def add_k_smoothing(count, total_token_count, vocab_size, smoothing_param):
     return (count + smoothing_param) / (total_token_count + smoothing_param * vocab_size)
 
-# # basic unigrams
-# def calculate_unigram_probabilities(corpus_counts, )
+def evaluate_basic_model_unigram(corpus: list, token_counts: dict, total_tokens: int):
+    validation_probs_log = []
+    for review in corpus:
+        log_review_prob = 0
+        for token in review:
+            # log since probability becomes very small on multiplication
+            log_review_prob += math.log(token_counts.get(token, token_counts[unk_token])/total_tokens)
+        validation_probs_log.append(log_review_prob)
+    perplexity = math.exp(-sum(validation_probs_log)/total_tokens)
+    return perplexity
 
-def calculate_perplexity_corpus(probabililty_dict: dict):
-    probabililty_list = probabililty_dict.values()
-    return math.exp(-sum([math.log(value) for value in probabililty_list])/len(probabililty_list))
+def evaluate_basic_model_bigram(corpus: list, token_counts: dict, bigram_counts: dict, total_tokens: int):
+    validation_probs_log = []
+    for review in corpus:
+        log_review_prob = 0
+        for (word1, word2) in review:
+            # process unknown words
+            eval_token1 = unk_token if word1 not in known_words else word1
+            eval_token2 = unk_token if word2 not in known_words else word2
+            # log since probability becomes very small on multiplication
+            log_review_prob += math.log(bigram_counts.get((eval_token1, eval_token2), 1)/token_counts[eval_token1])
+        validation_probs_log.append(log_review_prob)
+    perplexity = math.exp(-sum(validation_probs_log)/total_tokens)
+    return perplexity
+
 
 def evaluate_model(corpus: list, train_probs: dict, total_tokens_test: int):
     validation_probs_log = []
@@ -70,13 +79,6 @@ def evaluate_model(corpus: list, train_probs: dict, total_tokens_test: int):
         for token in review:
             # log since probability becomes very small on multiplication
             log_review_prob += math.log(train_probs[token])
-        ''' DEBUG FOR ZERO '''
-        if log_review_prob == 0:
-            print('FOUND THIS prob 0:', review)
-            wordwise = []
-            for token in review:
-                wordwise.append((token, train_probs.get(token, train_probs[unk_token])))
-            print('WORDS:', wordwise)
         validation_probs_log.append(log_review_prob)
     # TODO: Verify denominator -> train count or test count
     perplexity = math.exp(-sum(validation_probs_log)/total_tokens_test)
@@ -91,15 +93,7 @@ def evaluate_bigram_model(corpus: list, train_probs: dict, total_tokens_test: in
             # calculate it: prob_method(0, unigram_counts[bigram[0]], len(vocabulary), param)
             # log since probability becomes very small on multiplication
             log_review_prob += math.log(train_probs.get(bigram, prob_method(0, unigram_counts[bigram[0]], len(vocabulary), param)))
-        ''' DEBUG FOR ZERO '''
-        if log_review_prob == 0:
-            print('FOUND THIS prob 0:', review)
-            wordwise = []
-            for bigram in review:
-                wordwise.append((bigram, train_probs.get(bigram, prob_method(0, unigram_counts[bigram[0]], len(vocabulary), param))))
-            print('WORDS:', wordwise)
         validation_probs_log.append(log_review_prob)
-    # TODO: Verify denominator -> train count or test count
     perplexity = math.exp(-sum(validation_probs_log)/total_tokens_test)
     return perplexity
 
@@ -208,46 +202,6 @@ for bigram, count in bigram_counts.items():
 
 print('Total:', len(unigram_counts), 'UNK:', len(unknown_tokens_train), 'Known:', len(unigrams_counts_unk))
 
-def evaluate_basic_model_unigram(corpus: list, token_counts: dict, total_tokens: int):
-    validation_probs_log = []
-    for review in corpus:
-        log_review_prob = 0
-        for token in review:
-            # log since probability becomes very small on multiplication
-            log_review_prob += math.log(token_counts.get(token, token_counts[unk_token])/total_tokens)
-        ''' DEBUG FOR ZERO '''
-        if log_review_prob == 0:
-            print('FOUND THIS prob 0:', review)
-            wordwise = []
-            for token in review:
-                wordwise.append((token, token_counts[token]/total_tokens))
-            print('WORDS:', wordwise)
-        validation_probs_log.append(log_review_prob)
-    # TODO: Verify denominator -> train count or test count
-    perplexity = math.exp(-sum(validation_probs_log)/total_tokens)
-    return perplexity
-
-def evaluate_basic_model_bigram(corpus: list, token_counts: dict, bigram_counts: dict, total_tokens: int):
-    validation_probs_log = []
-    for review in corpus:
-        log_review_prob = 0
-        for (word1, word2) in review:
-            # process unknown words
-            eval_token1 = unk_token if word1 not in known_words else word1
-            eval_token2 = unk_token if word2 not in known_words else word2
-            # log since probability becomes very small on multiplication
-            log_review_prob += math.log(bigram_counts.get((eval_token1, eval_token2), 1)/token_counts[eval_token1])
-        ''' DEBUG FOR ZERO '''
-        if log_review_prob == 0:
-            print('FOUND THIS prob 0:', review)
-            wordwise = []
-            for bigram in review:
-                wordwise.append((bigram, token_counts[bigram]/total_tokens))
-            print('WORDS:', wordwise)
-        validation_probs_log.append(log_review_prob)
-    # TODO: Verify denominator -> train count or test count
-    perplexity = math.exp(-sum(validation_probs_log)/total_tokens)
-    return perplexity
 
 print('\n-----------------BASIC UNK PROCESSING----------------------')
 
@@ -259,10 +213,7 @@ print('Perplexity with UNK, bigram, test data:', evaluate_basic_model_bigram(tes
 '''
 SMOOTHING PROCESSING
 '''
-
-# add unknown token FOR SMOOTHING
-# TODO: separate section for unknown word handling without this ADDED
-# TODO: WARNING!
+# add unknown tokens FOR SMOOTHING
 for unigram in vocabulary:
     bigram_counts[(unk_token, unigram)] = 0
     bigram_counts[(unigram, unk_token)] = 0
