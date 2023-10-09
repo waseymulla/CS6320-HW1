@@ -33,18 +33,22 @@ def evaluate_basic_model_unigram(corpus: list, token_counts: dict, total_tokens:
     return perplexity
 
 def evaluate_basic_model_bigram(corpus: list, token_counts: dict, bigram_counts: dict, total_tokens: int):
-    validation_probs_log = []
-    for review in corpus:
-        log_review_prob = 0
-        for (word1, word2) in review:
-            # process unknown words
-            eval_token1 = unk_token if word1 not in known_words else word1
-            eval_token2 = unk_token if word2 not in known_words else word2
-            # log since probability becomes very small on multiplication
-            log_review_prob += math.log(bigram_counts.get((eval_token1, eval_token2), 1)/token_counts[eval_token1])
-        validation_probs_log.append(log_review_prob)
-    perplexity = math.exp(-sum(validation_probs_log)/total_tokens)
-    return perplexity
+    try:
+        validation_probs_log = []
+        for review in corpus:
+            log_review_prob = 0
+            for (word1, word2) in review:
+                # process unknown words
+                eval_token1 = unk_token if word1 not in known_words else word1
+                eval_token2 = unk_token if word2 not in known_words else word2
+                # log since probability becomes very small on multiplication
+                log_review_prob += math.log(bigram_counts[(eval_token1, eval_token2)]/token_counts[eval_token1])
+            validation_probs_log.append(log_review_prob)
+        perplexity = math.exp(-sum(validation_probs_log)/total_tokens)
+        return perplexity
+    except:
+        # exception when a bigram is not found
+        return math.inf
 
 def evaluate_model(corpus: list, train_probs: dict, total_tokens_test: int):
     validation_probs_log = []
