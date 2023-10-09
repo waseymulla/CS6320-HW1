@@ -1,22 +1,11 @@
-import urllib.request
 import re
-import ssl
 import math
 import copy
 
 # Define start, end, unknown-word tokens
-start_token = "<STR>"  # Symbol to mark the start of a data point
-end_token = "<STP>"    # Symbol to mark the end of a data point
-unk_token = "<UNK>"
-
-# URL for training data
-train_url = "https://raw.githubusercontent.com/waseymulla/CS6320-HW1/main/train.txt"
-
-# URL for test data
-test_url = "https://raw.githubusercontent.com/waseymulla/CS6320-HW1/main/val.txt"
-
-# Disable SSL certificate verification
-context = ssl._create_unverified_context()
+start_token = "<STR>"   # Symbol to mark the start of a data point
+end_token = "<STP>"     # Symbol to mark the end of a data point
+unk_token = "<UNK>"     # Symbol to mark an unknown token
 
 def preprocess_line(text: str):
     text = text.lower()                         # convert to lowercase
@@ -25,12 +14,12 @@ def preprocess_line(text: str):
     return text.split()                         # split into list of tokens
 
 # Laplace (Add-one) Smoothing Function
-def laplace_smoothing(word_count, total_token_count, vocab_size, smoothing_param=1):
-    return (word_count + smoothing_param) / (total_token_count + smoothing_param * vocab_size)
+def laplace_smoothing(word_count, base_count, vocab_size, smoothing_param = 1):
+    return (word_count + smoothing_param) / (base_count + smoothing_param * vocab_size)
 
 # Add-k Smoothing Function
-def add_k_smoothing(count, total_token_count, vocab_size, smoothing_param):
-    return (count + smoothing_param) / (total_token_count + smoothing_param * vocab_size)
+def add_k_smoothing(count, base_count, vocab_size, smoothing_param):
+    return (count + smoothing_param) / (base_count + smoothing_param * vocab_size)
 
 def evaluate_basic_model_unigram(corpus: list, token_counts: dict, total_tokens: int):
     validation_probs_log = []
@@ -65,7 +54,6 @@ def evaluate_model(corpus: list, train_probs: dict, total_tokens_test: int):
             # log since probability becomes very small on multiplication
             log_review_prob += math.log(train_probs[token])
         validation_probs_log.append(log_review_prob)
-    # TODO: Verify denominator -> train count or test count
     perplexity = math.exp(-sum(validation_probs_log)/total_tokens_test)
     return perplexity
 
@@ -86,15 +74,13 @@ def evaluate_bigram_model(corpus: list, train_probs: dict, total_tokens_test: in
 LOAD, PREPROCESS AND GET COUNTS FROM TRAIN DATA
 '''
 # Load and preprocess training data
-train_file = urllib.request.urlopen(train_url, context=context)
+train_file = open('train.txt', 'r')
 unigram_train_counts = {}
 bigram_train_counts = {}
-previous_token = None
 train_unigrams_sentences = []
 train_bigrams_sentences = []
 
 for line in train_file:
-    line = line.decode("utf-8")     # only for URL
 
     # preprocess, get list of tokens
     line = preprocess_line(line)
@@ -130,10 +116,8 @@ LOAD AND PREPROCESS TEST DATA
 test_unigrams_sentences = []
 test_bigrams_sentences = []
 
-test_file = urllib.request.urlopen(test_url, context=context)
+test_file = open('val.txt', 'r')
 for line in test_file:
-    line = line.decode("utf-8")     # only for URL
-
     # preprocess, get list of tokens
     line = preprocess_line(line)
 
